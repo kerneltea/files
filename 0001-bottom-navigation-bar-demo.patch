@@ -1,0 +1,582 @@
+From 300b5b5f56d22e2d69a62c35f99a340da86d4a96 Mon Sep 17 00:00:00 2001
+From: KernelTea <kerneltea@gmail.com>
+Date: Sun, 15 Sep 2019 21:28:38 +0800
+Subject: [PATCH] bottom navigation bar demo
+
+Signed-off-by: KernelTea <kerneltea@gmail.com>
+---
+ example/lib/PlatformLog.dart          | 25 +++++++++
+ example/lib/app.dart                  | 29 ++++++++++-
+ example/lib/global_store/reducer.dart | 24 +++++++++
+ example/lib/global_store/state.dart   | 15 ++++++
+ example/lib/global_store/store.dart   |  5 ++
+ example/lib/main_tab/action.dart      |  9 ++++
+ example/lib/main_tab/effect.dart      | 75 +++++++++++++++++++++++++++
+ example/lib/main_tab/page.dart        | 31 +++++++++++
+ example/lib/main_tab/reducer.dart     | 18 +++++++
+ example/lib/main_tab/state.dart       | 49 +++++++++++++++++
+ example/lib/main_tab/view.dart        | 52 +++++++++++++++++++
+ example/lib/todo_edit_page/state.dart |  9 +++-
+ example/lib/todo_list_page/state.dart |  9 +++-
+ example/test/widget_test.dart         | 30 +++++++++++
+ 14 files changed, 375 insertions(+), 5 deletions(-)
+ create mode 100644 example/lib/PlatformLog.dart
+ create mode 100644 example/lib/main_tab/action.dart
+ create mode 100644 example/lib/main_tab/effect.dart
+ create mode 100644 example/lib/main_tab/page.dart
+ create mode 100644 example/lib/main_tab/reducer.dart
+ create mode 100644 example/lib/main_tab/state.dart
+ create mode 100644 example/lib/main_tab/view.dart
+ create mode 100644 example/test/widget_test.dart
+
+diff --git a/example/lib/PlatformLog.dart b/example/lib/PlatformLog.dart
+new file mode 100644
+index 0000000..e810a97
+--- /dev/null
++++ b/example/lib/PlatformLog.dart
+@@ -0,0 +1,25 @@
++import 'package:flutter/services.dart';
++
++class PlatformLog {
++  static const perform = MethodChannel("platform_log");
++
++  static void v(String tag, String message) {
++    perform.invokeMethod<void>('logV', {'tag': tag, 'msg': message});
++  }
++
++  static void d(String tag, String message) {
++    perform.invokeMethod<void>('logD', {'tag': tag, 'msg': message});
++  }
++
++  static void i(String tag, String message) {
++    perform.invokeMethod<void>('logI', {'tag': tag, 'msg': message});
++  }
++
++  static void w(String tag, String message) {
++    perform.invokeMethod<void>('logW', {'tag': tag, 'msg': message});
++  }
++
++  static void e(String tag, String message) {
++    perform.invokeMethod<void>('logE', {'tag': tag, 'msg': message});
++  }
++}
+\ No newline at end of file
+diff --git a/example/lib/app.dart b/example/lib/app.dart
+index 60093de..5d3a75f 100644
+--- a/example/lib/app.dart
++++ b/example/lib/app.dart
+@@ -1,5 +1,7 @@
+ import 'package:fish_redux/fish_redux.dart';
+ import 'package:flutter/material.dart' hide Action;
++import 'package:sample/PlatformLog.dart';
++import 'package:sample/main_tab/page.dart';
+ 
+ import 'global_store/state.dart';
+ import 'global_store/store.dart';
+@@ -13,6 +15,8 @@ import 'todo_list_page/page.dart';
+ Widget createApp() {
+   final AbstractRoutes routes = PageRoutes(
+     pages: <String, Page<Object, dynamic>>{
++      'main_tab': MainPage(),
++
+       /// 注册TodoList主页面
+       'todo_list': ToDoListPage(),
+ 
+@@ -22,12 +26,15 @@ Widget createApp() {
+     visitor: (String path, Page<Object, dynamic> page) {
+       /// 只有特定的范围的 Page 才需要建立和 AppStore 的连接关系
+       /// 满足 Page<T> ，T 是 GlobalBaseState 的子类
++      PlatformLog.d("visitorTest", "visitor1:" + path);
+       if (page.isTypeof<GlobalBaseState>()) {
+         /// 建立 AppStore 驱动 PageStore 的单向数据连接
+         /// 1. 参数1 AppStore
+         /// 2. 参数2 当 AppStore.state 变化时, PageStore.state 该如何变化
++        PlatformLog.d("visitorTest", "visitor2" + path);
+         page.connectExtraStore<GlobalState>(GlobalStore.store, (Object pagestate, GlobalState appState) {
+           final GlobalBaseState p = pagestate;
++          PlatformLog.d("visitorTest", "visitor3" + path);
+           if (p.themeColor != appState.themeColor) {
+             if (pagestate is Cloneable) {
+               final Object copy = pagestate.clone();
+@@ -40,6 +47,26 @@ Widget createApp() {
+         });
+       }
+ 
++      if (page.isTypeof<GlobalBaseState2>()) {
++        /// 建立 AppStore 驱动 PageStore 的单向数据连接
++        /// 1. 参数1 AppStore
++        /// 2. 参数2 当 AppStore.state 变化时, PageStore.state 该如何变化
++        PlatformLog.d("visitorTest", "theme2 visitor2");
++        page.connectExtraStore<GlobalState2>(GlobalStore.store2, (Object pagestate, GlobalState2 appState) {
++          final GlobalBaseState2 p = pagestate;
++          PlatformLog.d("visitorTest", "theme2 visitor3");
++          if (p.themeColor2 != appState.themeColor2) {
++            if (pagestate is Cloneable) {
++              final Object copy = pagestate.clone();
++              final GlobalBaseState2 newState = copy;
++              newState.themeColor2 = appState.themeColor2;
++              return newState;
++            }
++          }
++          return pagestate;
++        });
++      }
++
+       /// AOP
+       /// 页面可以有一些私有的 AOP 的增强， 但往往会有一些 AOP 是整个应用下，所有页面都会有的。
+       /// 这些公共的通用 AOP ，通过遍历路由页面的形式统一加入。
+@@ -73,7 +100,7 @@ Widget createApp() {
+     theme: ThemeData(
+       primarySwatch: Colors.blue,
+     ),
+-    home: routes.buildPage('todo_list', null),
++    home: routes.buildPage('main_tab', null),
+     onGenerateRoute: (RouteSettings settings) {
+       return MaterialPageRoute<Object>(builder: (BuildContext context) {
+         return routes.buildPage(settings.name, settings.arguments);
+diff --git a/example/lib/global_store/reducer.dart b/example/lib/global_store/reducer.dart
+index 91d29d8..0ff5f67 100644
+--- a/example/lib/global_store/reducer.dart
++++ b/example/lib/global_store/reducer.dart
+@@ -2,6 +2,7 @@ import 'dart:ui';
+ 
+ import 'package:fish_redux/fish_redux.dart';
+ import 'package:flutter/material.dart' hide Action;
++import 'package:sample/PlatformLog.dart';
+ 
+ import 'action.dart';
+ import 'state.dart';
+@@ -24,5 +25,28 @@ List<Color> _colors = <Color>[
+ GlobalState _onchangeThemeColor(GlobalState state, Action action) {
+   final Color next =
+       _colors[((_colors.indexOf(state.themeColor) + 1) % _colors.length)];
++  PlatformLog.d("global_state", "_onchangeThemeColor1");
+   return state.clone()..themeColor = next;
+ }
++
++Reducer<GlobalState2> buildReducer2() {
++  return asReducer(
++    <Object, Reducer<GlobalState2>>{
++      GlobalAction.changeThemeColor: _onchangeThemeColor2,
++    },
++  );
++}
++
++List<Color> _colors2 = <Color>[
++  Colors.green,
++  Colors.red,
++  Colors.black,
++  Colors.blue
++];
++
++GlobalState2 _onchangeThemeColor2(GlobalState2 state, Action action) {
++  final Color next =
++  _colors[((_colors2.indexOf(state.themeColor2) + 1) % _colors.length)];
++  PlatformLog.d("global_state", "_onchangeThemeColor2");
++  return state.clone()..themeColor2 = next;
++}
+diff --git a/example/lib/global_store/state.dart b/example/lib/global_store/state.dart
+index ca8ef6a..47dbc45 100644
+--- a/example/lib/global_store/state.dart
++++ b/example/lib/global_store/state.dart
+@@ -16,3 +16,18 @@ class GlobalState implements GlobalBaseState, Cloneable<GlobalState> {
+     return GlobalState();
+   }
+ }
++
++abstract class GlobalBaseState2 {
++  Color get themeColor2;
++  set themeColor2(Color color);
++}
++
++class GlobalState2 implements GlobalBaseState2, Cloneable<GlobalState2> {
++  @override
++  Color themeColor2;
++
++  @override
++  GlobalState2 clone() {
++    return GlobalState2();
++  }
++}
+diff --git a/example/lib/global_store/store.dart b/example/lib/global_store/store.dart
+index 7d386c0..c9f1f89 100644
+--- a/example/lib/global_store/store.dart
++++ b/example/lib/global_store/store.dart
+@@ -9,4 +9,9 @@ class GlobalStore {
+ 
+   static Store<GlobalState> get store =>
+       _globalStore ??= createStore<GlobalState>(GlobalState(), buildReducer());
++
++  static Store<GlobalState2> _globalStore2;
++
++  static Store<GlobalState2> get store2 =>
++      _globalStore2 ??= createStore<GlobalState2>(GlobalState2(), buildReducer2());
+ }
+diff --git a/example/lib/main_tab/action.dart b/example/lib/main_tab/action.dart
+new file mode 100644
+index 0000000..a6972e3
+--- /dev/null
++++ b/example/lib/main_tab/action.dart
+@@ -0,0 +1,9 @@
++import 'package:fish_redux/fish_redux.dart';
++
++enum MainTabAction { switchPage }
++
++class MainTabActionCreator {
++  static Action switchPage(int index) {
++    return Action(MainTabAction.switchPage, payload: index);
++  }
++}
+diff --git a/example/lib/main_tab/effect.dart b/example/lib/main_tab/effect.dart
+new file mode 100644
+index 0000000..c7bfa83
+--- /dev/null
++++ b/example/lib/main_tab/effect.dart
+@@ -0,0 +1,75 @@
++
++import 'package:fish_redux/fish_redux.dart';
++import 'package:sample/main_tab/state.dart';
++
++import '../PlatformLog.dart';
++
++Effect<MainPageState> buildEffect() {
++  return combineEffects(<Object, Effect<MainPageState>>{
++    Lifecycle.initState: _init,
++    Lifecycle.didChangeDependencies: _didChangeDependencies,
++    Lifecycle.build : _build,
++    Lifecycle.reassemble: _reassemble,
++    Lifecycle.didUpdateWidget: _didUpdateWidget,
++    Lifecycle.deactivate : _deactivate,
++    Lifecycle.dispose: _dispose,
++    // didDisposed,
++
++    /// Only a adapter mixin VisibleChangeMixin will receive appear & disappear events.
++    /// class MyAdapter extends Adapter<T> with VisibleChangeMixin<T> {
++    ///   MyAdapter():super(
++    ///     ///
++    ///   );
++    /// }
++    Lifecycle.appear: _appear,
++    Lifecycle.disappear: _disappear,
++
++    /// Only a componenmt(page) or adapter mixin WidgetsBindingObserverMixin will receive didChangeAppLifecycleState event.
++    /// class MyComponent extends Component<T> with WidgetsBindingObserverMixin<T> {
++    ///   MyComponent():super(
++    ///     ///
++    ///   );
++    /// }
++    Lifecycle.didChangeAppLifecycleState: _didChangeAppLifecycleState,
++  });
++}
++
++void _init(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_init");
++}
++
++void _didChangeDependencies(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_didChangeDependencies");
++}
++
++void _build(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_build");
++}
++
++void _reassemble(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_reassemble");
++}
++
++void _didUpdateWidget(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_didUpdateWidget");
++}
++
++void _deactivate(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_deactivate");
++}
++
++void _dispose(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_dispose");
++}
++
++void _appear(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_appear");
++}
++
++void _disappear(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_disappear");
++}
++
++void _didChangeAppLifecycleState(Action action, Context<MainPageState> ctx) {
++  PlatformLog.d("MainTabEffect", "_didChangeAppLifecycleState");
++}
+\ No newline at end of file
+diff --git a/example/lib/main_tab/page.dart b/example/lib/main_tab/page.dart
+new file mode 100644
+index 0000000..6ed9ad9
+--- /dev/null
++++ b/example/lib/main_tab/page.dart
+@@ -0,0 +1,31 @@
++
++import 'package:fish_redux/fish_redux.dart';
++import 'package:sample/main_tab/reducer.dart';
++import 'package:sample/main_tab/state.dart';
++import 'package:sample/main_tab/view.dart';
++import 'package:sample/todo_edit_page/page.dart';
++import 'package:sample/todo_list_page/page.dart';
++
++import 'effect.dart';
++import 'state.dart';
++
++class MainPage extends Page<MainPageState, Map<String, dynamic>> {
++  MainPage()
++      : super(
++          initState: initState,
++          reducer: buildReducer(),
++          effect: buildEffect(),
++          view: buildView,
++          dependencies: Dependencies<MainPageState>(
++              adapter: null,
++              slots: <String, Dependent<MainPageState>>{
++                // 这里面实现了相应ToDoState和ToDoEditState的Connector好像也不成
++                // 如果是这里的问题，应当怎样实现？
++                "todo_list": todoConnector() + ToDoListPage(),
++                "todo_edit": todoEditConnector() + TodoEditPage()
++              }),
++          middleware: <Middleware<MainPageState>>[],
++        );
++}
++
++
+diff --git a/example/lib/main_tab/reducer.dart b/example/lib/main_tab/reducer.dart
+new file mode 100644
+index 0000000..62e0790
+--- /dev/null
++++ b/example/lib/main_tab/reducer.dart
+@@ -0,0 +1,18 @@
++import 'package:fish_redux/fish_redux.dart';
++import 'package:sample/main_tab/state.dart';
++
++import 'action.dart';
++
++Reducer<MainPageState> buildReducer() {
++  return asReducer(
++    <Object, Reducer<MainPageState>>{
++      MainTabAction.switchPage: _onSwitchPage,
++    },
++  );
++}
++
++MainPageState _onSwitchPage(MainPageState state, Action action) {
++  final MainPageState newState = state.clone();
++  newState.selectedIndex = action.payload;
++  return newState;
++}
+\ No newline at end of file
+diff --git a/example/lib/main_tab/state.dart b/example/lib/main_tab/state.dart
+new file mode 100644
+index 0000000..02c674c
+--- /dev/null
++++ b/example/lib/main_tab/state.dart
+@@ -0,0 +1,49 @@
++import 'dart:ui';
++
++import 'package:fish_redux/fish_redux.dart';
++import 'package:sample/global_store/state.dart';
++import 'package:sample/todo_edit_page/state.dart';
++import 'package:sample/todo_list_page/state.dart';
++import 'package:sample/todo_list_page/todo_component/component.dart';
++
++import '../PlatformLog.dart';
++
++class MainPageState implements GlobalBaseState, Cloneable<MainPageState> {
++  int selectedIndex = 0;
++
++  @override
++  Color themeColor;
++
++  PageState toDoState;
++
++  TodoEditState todoEditState;
++
++  @override
++  MainPageState clone() {
++    return MainPageState()
++      ..themeColor = themeColor
++      ..toDoState = toDoState
++      ..todoEditState = todoEditState
++      ..selectedIndex = selectedIndex;
++  }
++}
++
++MainPageState initState(Map<String, dynamic> args) {
++  return MainPageState();
++}
++
++ConnOp<MainPageState, PageState> todoConnector() {
++  return ConnOp<MainPageState, PageState>(
++      get: (MainPageState state) => state.toDoState,
++      set: (MainPageState state, PageState toDoState) {
++        state.toDoState = toDoState;
++      });
++}
++
++ConnOp<MainPageState, TodoEditState> todoEditConnector() {
++  return ConnOp<MainPageState, TodoEditState>(
++      get: (MainPageState state) => state.todoEditState,
++      set: (MainPageState state, TodoEditState todoEditState) {
++        state.todoEditState = todoEditState;
++      });
++}
+diff --git a/example/lib/main_tab/view.dart b/example/lib/main_tab/view.dart
+new file mode 100644
+index 0000000..84d94f5
+--- /dev/null
++++ b/example/lib/main_tab/view.dart
+@@ -0,0 +1,52 @@
++
++import 'package:fish_redux/fish_redux.dart';
++import 'package:flutter/material.dart';
++import 'package:sample/todo_edit_page/page.dart';
++import 'package:sample/todo_list_page/page.dart';
++
++import '../PlatformLog.dart';
++import 'action.dart';
++import 'state.dart';
++
++const TextStyle optionStyle =
++TextStyle(fontSize: 30, fontWeight: FontWeight.bold);
++
++
++
++Widget buildView(MainPageState state, Dispatch dispatch, ViewService viewService) {
++  final List<Widget> _widgetOptions = <Widget>[
++    ToDoListPage().buildPage(null),
++    const Text(
++      'Index 2: Ignore',
++      style: optionStyle,
++    ),
++    TodoEditPage().buildPage(null),
++  ];
++  PlatformLog.d("MainTabPage", "buildView");
++  return Scaffold(
++      body: IndexedStack(
++        index: state.selectedIndex,
++        children: _widgetOptions
++      ),
++      bottomNavigationBar: BottomNavigationBar(
++        items: const <BottomNavigationBarItem>[
++          BottomNavigationBarItem(
++            icon: Icon(Icons.home),
++            title: Text('Home'),
++          ),
++          BottomNavigationBarItem(
++            icon: Icon(Icons.business),
++            title: Text('Business'),
++          ),
++          BottomNavigationBarItem(
++            icon: Icon(Icons.school),
++            title: Text('School'),
++          ),
++        ],
++        currentIndex: state.selectedIndex,
++        selectedItemColor: Colors.amber[800],
++        onTap: (currentIndex) {
++          dispatch(MainTabActionCreator.switchPage(currentIndex));
++        },
++      ));
++}
+\ No newline at end of file
+diff --git a/example/lib/todo_edit_page/state.dart b/example/lib/todo_edit_page/state.dart
+index 259ad69..368087a 100644
+--- a/example/lib/todo_edit_page/state.dart
++++ b/example/lib/todo_edit_page/state.dart
+@@ -4,7 +4,8 @@ import 'package:flutter/material.dart' hide Action;
+ import '../global_store/state.dart';
+ import '../todo_list_page/todo_component/component.dart';
+ 
+-class TodoEditState implements GlobalBaseState, Cloneable<TodoEditState> {
++class TodoEditState
++    implements GlobalBaseState2, Cloneable<TodoEditState> {
+   ToDoState toDo;
+ 
+   TextEditingController nameEditController;
+@@ -24,8 +25,12 @@ class TodoEditState implements GlobalBaseState, Cloneable<TodoEditState> {
+       ..focusNodeName = focusNodeName
+       ..focusNodeDesc = focusNodeDesc
+       ..toDo = toDo
+-      ..themeColor = themeColor;
++      ..themeColor = themeColor
++      ..themeColor2 = themeColor2;
+   }
++
++  @override
++  Color themeColor2;
+ }
+ 
+ TodoEditState initState(ToDoState arg) {
+diff --git a/example/lib/todo_list_page/state.dart b/example/lib/todo_list_page/state.dart
+index 27798fb..e7285a1 100644
+--- a/example/lib/todo_list_page/state.dart
++++ b/example/lib/todo_list_page/state.dart
+@@ -5,7 +5,8 @@ import '../global_store/state.dart';
+ import 'report_component/component.dart';
+ import 'todo_component/component.dart';
+ 
+-class PageState implements GlobalBaseState, Cloneable<PageState> {
++class PageState
++    implements GlobalBaseState, GlobalBaseState2, Cloneable<PageState> {
+   List<ToDoState> toDos;
+ 
+   @override
+@@ -15,8 +16,12 @@ class PageState implements GlobalBaseState, Cloneable<PageState> {
+   PageState clone() {
+     return PageState()
+       ..toDos = toDos
+-      ..themeColor = themeColor;
++      ..themeColor = themeColor
++      ..themeColor2 = themeColor2;
+   }
++
++  @override
++  Color themeColor2;
+ }
+ 
+ PageState initState(Map<String, dynamic> args) {
+diff --git a/example/test/widget_test.dart b/example/test/widget_test.dart
+new file mode 100644
+index 0000000..747db1d
+--- /dev/null
++++ b/example/test/widget_test.dart
+@@ -0,0 +1,30 @@
++// This is a basic Flutter widget test.
++//
++// To perform an interaction with a widget in your test, use the WidgetTester
++// utility that Flutter provides. For example, you can send tap and scroll
++// gestures. You can also use WidgetTester to find child widgets in the widget
++// tree, read text, and verify that the values of widget properties are correct.
++
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++
++import 'package:example/main.dart';
++
++void main() {
++  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
++    // Build our app and trigger a frame.
++    await tester.pumpWidget(MyApp());
++
++    // Verify that our counter starts at 0.
++    expect(find.text('0'), findsOneWidget);
++    expect(find.text('1'), findsNothing);
++
++    // Tap the '+' icon and trigger a frame.
++    await tester.tap(find.byIcon(Icons.add));
++    await tester.pump();
++
++    // Verify that our counter has incremented.
++    expect(find.text('0'), findsNothing);
++    expect(find.text('1'), findsOneWidget);
++  });
++}
+-- 
+2.20.1 (Apple Git-117)
+
